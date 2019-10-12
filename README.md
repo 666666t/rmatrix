@@ -1,13 +1,13 @@
 # rmatrix
 A basic clone of cmatrix written in rust.
 
-#To-Do
+# To-Do
 -Avoid panics when resizing window
 -Argument support(?)
 
 # Installation
 `git clone https://github.com/666666t/rmatrix.git`
 
-#Use
+# Use
 `cargo run [--release]`
 
