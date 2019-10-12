@@ -2,8 +2,7 @@
 A basic clone of cmatrix written in rust.
 
 # To-Do
--Avoid panics when resizing window
-
+-Avoid panics when resizing window  
 -Argument support(?)
 
 # Installation
