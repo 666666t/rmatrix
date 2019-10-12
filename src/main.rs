@@ -37,7 +37,7 @@ fn main() -> Result<(), ErrorKind> {
     loop {
         let mut removal_flags: Vec<usize> = Vec::new();
         let (x, y) = term.size()?;
-        for i in 0..x {
+        for i in 0..x - 1 {
             if rng.gen::<f64>() > 0.99 {
                 trails.push(Trail::new(i.into(), rng.gen_range(5, y - 10)));
             }
@@ -62,7 +62,15 @@ fn main() -> Result<(), ErrorKind> {
                     print!("{}", line);
                 }
                 cursor.goto(x, head_y)?;
-                let rnchar = char::from_u32(rng.gen_range(33, 127)).unwrap();
+                let rnchara = char::from_u32(rng.gen_range(34,127)).unwrap();
+                let rncharb = char::from_u32(rng.gen_range(12449,12542)).unwrap();
+                
+                let rnchar:char;
+                if rng.gen::<f64>() < 0.5 {
+                    rnchar = rnchara;
+                } else {
+                    rnchar = rncharb;
+                }
                 let line = style(format!("{}", rnchar)).with(Color::White);
                 print!("{}", line);
                 trails[i].last_char=rnchar;
@@ -86,6 +94,6 @@ fn main() -> Result<(), ErrorKind> {
             trails.remove(i);
         }
         
-        thread::sleep(time::Duration::from_millis(30));
+        thread::sleep(time::Duration::from_millis(10));
     }
 }
