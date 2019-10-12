@@ -62,7 +62,7 @@ fn main() -> Result<(), ErrorKind> {
                     print!("{}", line);
                 }
                 cursor.goto(x, head_y)?;
-                let rnchara = char::from_u32(rng.gen_range(34,127)).unwrap();
+                let rnchara = char::from_u32(rng.gen_range(65296,65371)).unwrap();
                 let rncharb = char::from_u32(rng.gen_range(12449,12542)).unwrap();
                 
                 let rnchar:char;
@@ -94,6 +94,6 @@ fn main() -> Result<(), ErrorKind> {
             trails.remove(i);
         }
         
-        thread::sleep(time::Duration::from_millis(10));
+        thread::sleep(time::Duration::from_millis(20));
     }
 }
