@@ -1,5 +1,5 @@
 use crossterm::{cursor, style, terminal};
-use crossterm::{Color, ErrorKind};
+use crossterm::{Color, ErrorKind, Terminal, TerminalCursor};
 
 use std::{char, thread, time};
 
@@ -8,125 +8,141 @@ use rand::prelude::*;
 struct Trail {
     x: u16,
     y_head: u16,
-    y_tail: u16,
+    y_tail: i32,
     printing: bool,
     last_char: char,
 }
 
 impl Trail {
-    fn new(x: u16, length: u16) -> Trail {
+    fn new(x: u16, length: i32) -> Trail {
         Trail {
             x: x,
             y_head: 0,
-            y_tail: length,
+            y_tail: 0 - length,
             printing: true,
             last_char: '0',
         }
     }
+
+    fn printdown(&mut self, args: &Args, cursor: &TerminalCursor) -> Result<(), ErrorKind> {
+        let mut rng = rand::thread_rng();
+
+        cursor.goto(self.x, self.y_head)?;
+
+        if self.y_head >= 1 {
+            cursor.goto(self.x, self.y_head - 1)?;
+            let line = style(format!("{}", self.last_char))
+                .with(args.colorset[rng.gen_range(0, args.colorset.len())]);
+            print!("{}", line);
+        }
+        //Color previous line to random element of set
+        //TODO: see if possible to change color without saving last value (get_character?)
+
+        let rnchar: char = *args.charset.choose(&mut rng).unwrap();
+        //TODO: Allow custom charsets via argument
+
+        cursor.goto(self.x, self.y_head)?;
+        let line = style(format!("{}", rnchar)).with(Color::White);
+        print!("{}", line);
+        self.last_char = rnchar;
+        //Print random character to head location, save character for later update
+        //TODO: see last_char draw section
+
+        Ok(())
+    }
 }
-//Fields and Constructor of falling trails
+
+struct Args {
+    delay: u64,
+    colorset: Vec<Color>,
+    spawn_rate: f64,
+    tmin: u16,
+    tmax: u16,
+    charset: Vec<char>,
+}
+
+impl Args {
+    fn new() -> Args {
+        Args {
+            delay: 25,
+            colorset: vec![Color::Green],
+            spawn_rate: 0.01,
+            tmin: 5,
+            tmax: 25,
+            charset: Args::generate_charset(vec![('゠', 'ヿ'), ('０', 'ｚ')]),
+        }
+    }
+
+    fn generate_charset(ranges: Vec<(char, char)>) -> Vec<char> {
+        ranges
+            .into_iter()
+            .map(|(a, b)| (a as u32, b as u32))
+            .map(|(a, b)| a..=b)
+            .flatten()
+            .map(|a| char::from_u32(a).unwrap())
+            .collect::<Vec<char>>()
+    }
+}
+
 
 fn main() -> Result<(), ErrorKind> {
     let cursor = cursor();
     let term = terminal();
+    let user_args = Args::new();
 
-    cursor.hide()?;
+    drawloop(&cursor, &term, &user_args)?;
 
-    let delay = 45;
-    let colorset: Vec<Color> = vec![Color::Green];
-    let spawn_rate: f64 = 0.01;
-    //Values intended to use arguments go here
+    Ok(())
+}
 
+fn drawloop(cursor: &TerminalCursor, term: &Terminal, args: &Args) -> Result<(), ErrorKind> {
     let mut trails: Vec<Trail> = Vec::new();
     let mut rng = rand::thread_rng();
+    cursor.hide()?;
+
+
 
     loop {
-        let mut removal_flags: Vec<usize> = Vec::new();
-        //Indexes of the trail are fed here to be removed at the end of each draw
-
+        let mut removals: i32 = 0;
         let (x, y) = term.size()?;
+
         for i in 0..x - 1 {
-            if rng.gen::<f64>() < spawn_rate {
-                trails.push(Trail::new(i.into(), rng.gen_range(5, y - 10)));
+            if rng.gen::<f64>() < args.spawn_rate {
+                trails.push(Trail::new(
+                    i.into(),
+                    rng.gen_range(args.tmin, y-args.tmax) as i32,
+                ));
             }
         }
         //Iterate across x every loop,
         //each coordinate has a chance (variable spawn_rate) of spawning a new trail each update.
-        //TODO: consider trail length as argument field too?
+        //Trail length is [tmin, tmax)
 
         for i in 0..trails.len() {
-            let head_y = trails[i].y_head;
-            let mut tail_y: i32 = -1;
-            if trails[i].y_tail <= head_y {
-                tail_y = trails[i].y_head as i32 - trails[i].y_tail as i32;
-            }
             let x = trails[i].x;
-            //Initial lets to avoid repeatedly calling vector element
-            //Note that majority of if statements are to avoid panic from invalid coordinates.
 
-            if head_y == y {
+            if trails[i].y_head == y {
                 trails[i].printing = false;
+            } else if trails[i].printing {
+                trails[i].printdown(&args, &cursor)?;
             }
-            //Mark path to only be cleaned up by tail.
 
-            if trails[i].printing {
-                if head_y >= 1 {
-                    cursor.goto(x, head_y - 1)?;
-                    let line = style(format!("{}", trails[i].last_char))
-                        .with(colorset[rng.gen_range(0, colorset.len())]);
-                    print!("{}", line);
-                }
-                //Color previous line to random element of set
-                //TODO: see if possible to change color without saving last value (get_character?)
-
-                let rnchara = char::from_u32(rng.gen_range(65296, 65371)).unwrap();
-                let rncharb = char::from_u32(rng.gen_range(12449, 12542)).unwrap();
-                let rnchar: char;
-                if rng.gen::<f64>() < 0.5 {
-                    rnchar = rnchara;
-                } else {
-                    rnchar = rncharb;
-                }
-                //Random Character Generation
-                //Current Set A: [65296,65370]: Fullwidth Letters+Numbers
-                //Current Set B: [12449, 12541]: Fullwidth Katakana
-                //TODO: Improve selection for multiple character ranges (vector of chars?)
-                //TODO: Allow custom charsets via argument
-
-                cursor.goto(x, head_y)?;
-                let line = style(format!("{}", rnchar)).with(Color::White);
-                print!("{}", line);
-                trails[i].last_char = rnchar;
-                //Print random character to head location, save character for later update
-                //TODO: see last_char draw section
-                //TODO?: relegate this printing to struct method
+            if trails[i].y_tail >= 0 && trails[i].y_tail < y as i32 {
+                cursor.goto(x, trails[i].y_tail as u16)?;
+                print!(" ");
+            } else if trails[i].y_tail == y as i32 {
+                removals += 1;
             }
 
             trails[i].y_head += 1;
+            trails[i].y_tail += 1;
+        }
+        //Iterate through trails, updating all coordinates that exist within terminal bounds
 
-            if tail_y != -1 {
-                cursor.goto(x, tail_y as u16)?;
-                print!(" ");
-            }
-            //Tail clearing of lines
-
-            if (trails[i].y_head as i32 - trails[i].y_tail as i32) == y as i32 {
-                removal_flags.push(i);
-            }
-            //Buffer indices of completed lines to be removed after loop
-            //Immediate removal would require modification of i
-            //TODO: Possibly Unnecessary, as lines should finish in order of creation
+        for _ in 0..removals {
+            trails.remove(0);
         }
 
-        removal_flags.sort();
-        removal_flags.reverse();
-        for i in 0..removal_flags.len() {
-            trails.remove(i);
-        }
-        //Remove Flagged lines
-        //TODO: Possible modification to simply clear index 0 of trails n times,
-        //where n is the amount of lines finished.
-
-        thread::sleep(time::Duration::from_millis(delay));
+        thread::sleep(time::Duration::from_millis(args.delay));
     }
 }
