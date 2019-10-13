@@ -1,9 +1,11 @@
 use crossterm::{cursor, style, terminal};
-use crossterm::{Color, ErrorKind, Terminal, TerminalCursor};
+use crossterm::{AlternateScreen, Color, ErrorKind, Terminal, TerminalCursor};
 
 use std::{char, thread, time};
 
 use rand::prelude::*;
+
+use ctrlc;
 
 struct Trail {
     x: u16,
@@ -24,7 +26,12 @@ impl Trail {
         }
     }
 
-    fn printdown(&mut self, args: &Args, cursor: &TerminalCursor) -> Result<(), ErrorKind> {
+    fn printdown(
+        &mut self,
+        args: &Args,
+        cursor: &TerminalCursor,
+        term: &Terminal,
+    ) -> Result<(), ErrorKind> {
         let mut rng = rand::thread_rng();
 
         cursor.goto(self.x, self.y_head)?;
@@ -42,8 +49,7 @@ impl Trail {
         //TODO: Allow custom charsets via argument
 
         cursor.goto(self.x, self.y_head)?;
-        let line = style(format!("{}", rnchar)).with(Color::White);
-        print!("{}", line);
+        term.write(style(rnchar).with(Color::White))?;
         self.last_char = rnchar;
         //Print random character to head location, save character for later update
         //TODO: see last_char draw section
@@ -84,23 +90,22 @@ impl Args {
     }
 }
 
-
 fn main() -> Result<(), ErrorKind> {
     let cursor = cursor();
     let term = terminal();
     let user_args = Args::new();
 
+    c_handle();
     drawloop(&cursor, &term, &user_args)?;
-
     Ok(())
 }
 
 fn drawloop(cursor: &TerminalCursor, term: &Terminal, args: &Args) -> Result<(), ErrorKind> {
     let mut trails: Vec<Trail> = Vec::new();
     let mut rng = rand::thread_rng();
+
     cursor.hide()?;
-
-
+    //term.clear(ClearType::All)?;
 
     loop {
         let mut removals: i32 = 0;
@@ -110,7 +115,7 @@ fn drawloop(cursor: &TerminalCursor, term: &Terminal, args: &Args) -> Result<(),
             if rng.gen::<f64>() < args.spawn_rate {
                 trails.push(Trail::new(
                     i.into(),
-                    rng.gen_range(args.tmin, y-args.tmax) as i32,
+                    rng.gen_range(args.tmin, y - args.tmax) as i32,
                 ));
             }
         }
@@ -124,7 +129,7 @@ fn drawloop(cursor: &TerminalCursor, term: &Terminal, args: &Args) -> Result<(),
             if trails[i].y_head == y {
                 trails[i].printing = false;
             } else if trails[i].printing {
-                trails[i].printdown(&args, &cursor)?;
+                trails[i].printdown(&args, &cursor, &term)?;
             }
 
             if trails[i].y_tail >= 0 && trails[i].y_tail < y as i32 {
@@ -145,4 +150,13 @@ fn drawloop(cursor: &TerminalCursor, term: &Terminal, args: &Args) -> Result<(),
 
         thread::sleep(time::Duration::from_millis(args.delay));
     }
+}
+
+fn c_handle() {
+    let a = AlternateScreen::to_alternate(false).unwrap();
+    ctrlc::set_handler(move || {
+        a.to_main().unwrap();
+        std::process::exit(1);
+    })
+    .expect("Ctrl+C handler error");
 }
